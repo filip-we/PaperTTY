@@ -14,7 +14,7 @@ class IT8951(WaveshareEPD):
     This class will automatically infer the width and height by querying the
     controller."""
 
-    VCOM = 2000
+    DEFAULT_VCOM = 2000
 
     CMD_GET_DEVICE_INFO = [0x03, 0x02]
     CMD_WRITE_REGISTER = [0x00, 0x11]
@@ -177,17 +177,16 @@ class IT8951(WaveshareEPD):
             result = result[0:null_index]
         return result
 
-    def init(self, **kwargs):
+    def init(self, vcom=None, enable_a2=True, enable_1bpp=True, mhz=None, **kwargs):
         if self.epd_init(includeDcPin=False) != 0:
             return -1
 
-        mhz = kwargs.get('mhz', None)
         if mhz:
             self.SPI.max_speed_hz = int(mhz * 1000000)
         else:
             self.SPI.max_speed_hz = 2000000
         print("SPI Speed = %.02f Mhz" % (self.SPI.max_speed_hz / 1000.0 / 1000.0))
-        
+
         # It is unclear why this is necessary but it appears to be. The sample
         # code from WaveShare [1] manually controls the CS bin and has its state
         # span multiple SPI operations.
@@ -218,9 +217,9 @@ class IT8951(WaveshareEPD):
         self.img_addr = img_addr_h << 16 | img_addr_l
 
         self.in_bpp1_mode = False
-        self.enable_1bpp = kwargs.get('enable_1bpp', self.enable_1bpp)
         self.supports_a2 = False
-        self.enable_a2 = kwargs.get('enable_a2', True)
+        if enable_a2 is not None:
+            self.enable_a2 = enable_a2
 
         #6inch e-Paper HAT(800,600), 6inch HD e-Paper HAT(1448,1072), 6inch HD touch e-Paper HAT(1448,1072)
         if len(lut_version) >= 4 and lut_version[:4] == "M641":
@@ -267,12 +266,13 @@ class IT8951(WaveshareEPD):
         # Set to Enable I80 Packed mode.
         self.write_register(self.REG_I80CPCR, 0x0001)
 
-        vcom = kwargs.get('vcom', None)
-        if vcom:
-            self.VCOM = vcom
-            
-        if self.VCOM != self.get_vcom():
-            self.set_vcom(self.VCOM)
+        if not vcom:
+            vcom = self.DEFAULT_VCOM
+            print("Warning! Using default value for VCOM - this might not suit your screen!")
+            return -1
+
+        if vcom != self.get_vcom():
+            self.set_vcom(vcom)
             print("VCOM = -%.02fV" % (self.get_vcom() / 1000.0))
 
         # Initialize the display with a blank image.
